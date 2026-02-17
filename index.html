@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+  <head>
+
+    <script src="https://track.secrettrick.lat/assets/easyt.js" async></script>
+
+
+
+
+<script>
+(function(){
+  var SITE_ID = "8bcc528d-b40f-4f4d-b95f-8f962fbd3b15";
+  var API = "https://glaekqilpcashhyygpsm.supabase.co/functions/v1/track";
+  var visitorId = localStorage.getItem("_tid");
+  if(!visitorId){visitorId=crypto.randomUUID();localStorage.setItem("_tid",visitorId)}
+  var sessionId = sessionStorage.getItem("_sid_"+SITE_ID);
+  var lastVideoTime = -1;
+  var lastScrollY = -1;
+  var hasTrackedPlay = false;
+  var lastActivity = Date.now();
+  var isIdle = false;
+  var IDLE_TIMEOUT = 120000; // 2 minutes
+
+  // Track user activity
+  function markActive(){lastActivity=Date.now();if(isIdle){isIdle=false}}
+  ["mousemove","mousedown","touchstart","touchmove","keydown","scroll","click"].forEach(function(evt){
+    window.addEventListener(evt,markActive,{passive:true,capture:true})
+  });
+
+  function post(body, cb){
+    fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(Object.assign({site_id:SITE_ID,visitor_id:visitorId},body))})
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.session_id){sessionId=d.session_id;sessionStorage.setItem("_sid_"+SITE_ID,sessionId)}
+      if(cb)cb(d)
+    })
+    .catch(function(e){console.error("[Track]",e)})
+  }
+
+  // Start session (country detected server-side)
+  if(!sessionId){
+    post({action:"session_start",user_agent:navigator.userAgent,referrer:document.referrer})
+  }
+
+  // Heartbeat every 10s - but only if user is active
+  setInterval(function(){
+    if(!sessionId)return;
+    if(Date.now()-lastActivity>IDLE_TIMEOUT){isIdle=true;return}
+    post({action:"heartbeat",session_id:sessionId})
+  },10000);
+
+  // Scroll tracking (page percentage)
+  var scrollTimer=null;
+  window.addEventListener("scroll",function(){
+    if(scrollTimer)return;
+    scrollTimer=setTimeout(function(){
+      scrollTimer=null;
+      if(!sessionId)return;
+      var docH=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)-window.innerHeight;
+      if(docH<=0)return;
+      var pct=Math.min(100,Math.max(0,Math.round((window.scrollY/docH)*100)));
+      if(isNaN(pct)||Math.abs(pct-lastScrollY)<10)return;
+      lastScrollY=pct;
+      post({action:"event",session_id:sessionId,event_type:"scroll_position",event_data:{percent:pct}})
+    },2000)
+  });
+
+  // Video tracking - detect real play (click, autoplay, in-app browsers)
+  var realPlay = false;
+
+  // Method 1: User click on player
+  document.addEventListener("click",function(e){
+    if(!e.isTrusted)return;
+    var t=e.target;
+    if(t&&t.closest&&t.closest("vturb-smartplayer,[id*=player],[id*=video],[class*=player],[class*=video],video")){
+      realPlay=true;
+    }
+  },true);
+  window.addEventListener("vturbRealPlay",function(){realPlay=true});
+
+  // Method 2: Detect ANY video play (autoplay, in-app browsers, iframes)
+  function attachVideoListeners(vid){
+    if(vid._tracked)return;
+    vid._tracked=true;
+    var checkTime=function(){
+      if(realPlay)return;
+      if(vid.currentTime>2&&vid.duration>10){realPlay=true}
+    };
+    vid.addEventListener("timeupdate",checkTime);
+    vid.addEventListener("playing",function(){
+      setTimeout(checkTime,2500);
+    });
+  }
+
+  // Scan for video elements (including inside iframes)
+  function scanVideos(){
+    var vids=document.querySelectorAll("video");
+    for(var v=0;v<vids.length;v++)attachVideoListeners(vids[v]);
+    // Check smartplayer API
+    try{
+      var i=window.smartplayer&&window.smartplayer.instances&&window.smartplayer.instances[0];
+      if(i&&i.video)attachVideoListeners(i.video);
+    }catch(e){}
+    // Try to access videos inside iframes (same-origin only)
+    try{
+      var iframes=document.querySelectorAll("iframe");
+      for(var f=0;f<iframes.length;f++){
+        try{
+          var iDoc=iframes[f].contentDocument||iframes[f].contentWindow.document;
+          if(iDoc){
+            var iVids=iDoc.querySelectorAll("video");
+            for(var iv=0;iv<iVids.length;iv++)attachVideoListeners(iVids[iv]);
+          }
+        }catch(e){}
+      }
+    }catch(e){}
+  }
+  scanVideos();
+  setInterval(scanVideos,2000);
+
+  // Method 3: Polling fallback - detect play via smartplayer API or any video currentTime
+  // This catches cases where video elements are in cross-origin iframes
+  function pollForPlay(){
+    if(realPlay)return;
+    // Check smartplayer API
+    try{
+      var i=window.smartplayer&&window.smartplayer.instances&&window.smartplayer.instances[0];
+      if(i&&i.video&&i.video.currentTime>2&&i.video.duration>10){realPlay=true;return}
+    }catch(e){}
+    // Check vturb custom element
+    try{
+      var p=document.querySelector("vturb-smartplayer");
+      if(p&&p.currentTime>2&&p.duration>10){realPlay=true;return}
+    }catch(e){}
+    // Check all visible videos
+    try{
+      var vids=document.querySelectorAll("video");
+      for(var v=0;v<vids.length;v++){
+        if(vids[v].currentTime>2&&vids[v].duration>10){realPlay=true;return}
+      }
+    }catch(e){}
+  }
+  setInterval(pollForPlay,1500);
+
+  // MutationObserver to catch dynamically added videos
+  try{
+    new MutationObserver(function(){scanVideos()}).observe(document.body||document.documentElement,{childList:true,subtree:true});
+  }catch(e){}
+
+  function trackVideo(){
+    if(!realPlay||!sessionId)return;
+    var ct=0,dur=0;
+    try{var i=window.smartplayer&&window.smartplayer.instances&&window.smartplayer.instances[0];if(i&&i.video){ct=i.video.currentTime||0;dur=i.video.duration||0}}catch(e){}
+    if(ct<=0)try{var p=document.querySelector("vturb-smartplayer");if(p){ct=p.currentTime||0;dur=p.duration||0}}catch(e){}
+    if(ct<=0)try{var vids=document.querySelectorAll("video");for(var v=0;v<vids.length;v++){if(vids[v].currentTime>0&&vids[v].duration>10){ct=vids[v].currentTime;dur=vids[v].duration;break}}}catch(e){}
+    if(ct<=0)return;
+    markActive(); // video is playing = user is active
+
+    if(!hasTrackedPlay){
+      hasTrackedPlay=true;
+      post({action:"event",session_id:sessionId,event_type:"video_play",event_data:{duration:dur>0?Math.floor(dur):0}})
+    }
+    var t=Math.floor(ct);
+    if(t===lastVideoTime||t%5!==0)return;
+    lastVideoTime=t;
+    post({action:"event",session_id:sessionId,event_type:"video_progress",event_data:{current_time:t,duration:dur>0?Math.floor(dur):0,percent:dur>0?Math.round((ct/dur)*100):0}})
+  }
+  setInterval(trackVideo,1000);
+
+  // Page unlock
+  window.addEventListener("startPricingTimer",function(){
+    if(sessionId)post({action:"page_unlock",session_id:sessionId})
+  });
+
+  // Button clicks - track ALL links and buttons
+  document.addEventListener("click",function(e){
+    var el=e.target.closest("a[href],button");
+    if(!el||!sessionId)return;
+    var href=(el.href||el.getAttribute("href")||"").slice(0,2048);
+    var text=(el.textContent||"").trim().slice(0,500);
+    if(!href&&!text)return;
+    post({action:"event",session_id:sessionId,event_type:"button_click",event_data:{url:href,text:text}})
+  });
+})();
+</script>
+
+
+    
+
+    <script>
+  window.pixelId = "69925803a59f9a266db94344";
+  var a = document.createElement("script");
+  a.setAttribute("async", "");
+  a.setAttribute("defer", "");
+  a.setAttribute("src", "https://cdn.utmify.com.br/scripts/pixel/pixel.js");
+  document.head.appendChild(a);
+</script>
+    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BBC</title>
+    <meta name="description" content="Lovable Generated Project">
+    <meta name="author" content="" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4af3915c-235d-4948-883a-56c4cadef651/id-preview-260850b6--2178f7c1-603c-4558-8e61-a4534fc6df2f.lovable.app-1771169616017.png">
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="" />
+    <meta name="twitter:image" content="https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/4af3915c-235d-4948-883a-56c4cadef651/id-preview-260850b6--2178f7c1-603c-4558-8e61-a4534fc6df2f.lovable.app-1771169616017.png">
+    <meta property="og:title" content="BBC">
+    <meta name="twitter:title" content="BBC">
+    <meta property="og:description" content="Lovable Generated Project">
+    <meta name="twitter:description" content="Lovable Generated Project">
+
+    <!-- Preconnect to critical third-party origins -->
+    <link rel="preconnect" href="https://scripts.converteai.net" crossorigin>
+    <link rel="preconnect" href="https://cdn.converteai.net" crossorigin>
+    <link rel="preconnect" href="https://go.centerpag.com" crossorigin>
+    <link rel="preconnect" href="https://checkout.centerpag.com" crossorigin>
+    <link rel="dns-prefetch" href="https://checkout.centerpag.com">
+    <link rel="dns-prefetch" href="https://go.centerpag.com">
+    <link rel="dns-prefetch" href="https://images.converteai.net">
+    <link rel="dns-prefetch" href="https://api.vturb.com.br">
+    <link rel="dns-prefetch" href="https://cdn.utmify.com.br">
+    <link rel="dns-prefetch" href="https://track.natrontrick.lat">
+
+    <!-- Performance timestamp -->
+    <script>!function(i,n){i._plt=i._plt||(n&&n.timeOrigin?n.timeOrigin+n.now():Date.now())}(window,performance);</script>
+
+    <!-- Preload critical video player script -->
+    <link rel="preload" href="https://scripts.converteai.net/d0d64cb2-dca3-4be6-983c-3bc700b6a1d8/players/6992495044e6bfed3574cbdd/v4/player.js" as="script">
+    <link rel="preload" href="https://scripts.converteai.net/lib/js/smartplayer-wc/v4/smartplayer.js" as="script">
+    <link rel="preload" href="https://cdn.converteai.net/d0d64cb2-dca3-4be6-983c-3bc700b6a1d8/6992490b7255254103512036/main.m3u8" as="fetch">
+    <link rel="dns-prefetch" href="https://cdn.converteai.net">
+    <link rel="dns-prefetch" href="https://scripts.converteai.net">
+    <link rel="dns-prefetch" href="https://images.converteai.net">
+    <link rel="dns-prefetch" href="https://api.vturb.com.br">
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
