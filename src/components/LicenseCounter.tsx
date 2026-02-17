@@ -22,10 +22,10 @@ const LicenseCounter = () => {
         <ChevronDown className="w-6 h-6 text-amber-400 animate-bounce" />
       </div>
 
-      <a href="https://go.centerpag.com/PPU38CQ7M9M" target="_blank" rel="noopener noreferrer" className="buy-button-green text-sm md:text-lg tracking-widest">
+      <a href="https://go.centerpag.com/PPU38CQ7OJ2" target="_blank" rel="noopener noreferrer" className="buy-button-green text-sm md:text-lg tracking-widest">
         CLICK HERE TO GET LOTTOCASH
       </a>
-      <a href="https://go.centerpag.com/PPU38CQ7M9M" target="_blank" rel="noopener noreferrer" className="block text-sm md:text-base text-blue-400 underline text-center mt-4 hover:text-blue-300 transition-colors">
+      <a href="https://go.centerpag.com/PPU38CQ7OJ2" target="_blank" rel="noopener noreferrer" className="block text-sm md:text-base text-blue-400 underline text-center mt-4 hover:text-blue-300 transition-colors">
         I want my lifetime licence now
       </a>
     </div>
