@@ -159,7 +159,7 @@ const VideoPlayer = () => {
 
     // Load the vturb player script
     const script = document.createElement("script");
-    script.src = "https://scripts.converteai.net/d0d64cb2-dca3-4be6-983c-3bc700b6a1d8/players/6992495044e6bfed3574cbdd/v4/player.js";
+    script.src = "https://scripts.converteai.net/d0d64cb2-dca3-4be6-983c-3bc700b6a1d8/players/6993bd0de18db05d4442531c/v4/player.js";
     script.async = true;
     document.head.appendChild(script);
 
@@ -167,7 +167,7 @@ const VideoPlayer = () => {
     script.onload = () => {
       const revealScript = document.createElement("script");
       revealScript.textContent = `
-        var delaySeconds = 1744;
+        var delaySeconds = 1518;
         var player = document.querySelector("vturb-smartplayer");
         
         if (player) {
@@ -217,7 +217,7 @@ const VideoPlayer = () => {
           {/* Video Player */}
           <div 
             dangerouslySetInnerHTML={{
-              __html: `<vturb-smartplayer id="vid-6992495044e6bfed3574cbdd" style="display: block; margin: 0 auto; width: 100%; max-width: 100%;"></vturb-smartplayer>`
+              __html: `<vturb-smartplayer id="vid-6993bd0de18db05d4442531c" style="display: block; margin: 0 auto; width: 100%; max-width: 100%;"></vturb-smartplayer>`
             }}
           />
 
